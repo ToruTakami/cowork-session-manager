@@ -1,0 +1,94 @@
+flowchart TD
+    START([▶ 起動]) --> FINDROOT["find_sessions_root()\nClaude_{uuid} を動的探索"]
+
+    FINDROOT --> ROOT_CHECK{セッションルート\n存在する?}
+    ROOT_CHECK -- No --> ERR1([❌ エラー終了\nsys.exit])
+    ROOT_CHECK -- Yes --> ARGPARSE["引数パース\n--dry-run / --sort\n--archived / --active"]
+
+    ARGPARSE --> DISCOVER["discover_sessions()\nSESSIONS_ROOT を 3 階層走査\nouter_uuid → project_uuid → local_{uuid}"]
+
+    DISCOVER --> FILTER{フィルタ指定}
+    FILTER -- "--archived" --> FILTER_A["アーカイブ済みのみ\n抽出"]
+    FILTER -- "--active" --> FILTER_B["アクティブのみ\n抽出"]
+    FILTER -- "なし" --> SORT
+
+    FILTER_A --> SORT["ソート\n--sort date / size / name"]
+    FILTER_B --> SORT
+
+    SORT --> DISPLAY["display_sessions()\n番号付き一覧を表示"]
+
+    DISPLAY --> EMPTY{セッション\nあり?}
+    EMPTY -- No --> END1([✅ 正常終了])
+    EMPTY -- Yes --> MENU["アクションメニュー表示\nD / A / U / Q"]
+
+    MENU --> ACTION_INPUT[/"Action: 入力"/]
+    ACTION_INPUT --> ACTION_CHECK{入力値}
+
+    ACTION_CHECK -- "Q / Enter" --> END2([✅ 正常終了])
+    ACTION_CHECK -- "不正な値" --> END3([⚠ 終了])
+    ACTION_CHECK -- "D" --> SEL_INPUT
+    ACTION_CHECK -- "A" --> SEL_INPUT
+    ACTION_CHECK -- "U" --> SEL_INPUT
+
+    SEL_INPUT[/"Select: 番号入力\n例: 1,3,5 / 1-5 / all"/]
+    SEL_INPUT --> SEL_EMPTY{入力あり?}
+    SEL_EMPTY -- No --> END4([✅ キャンセル])
+    SEL_EMPTY -- Yes --> PARSE["parse_selection()\n番号をインデックス集合に変換"]
+
+    PARSE --> VALID{有効な\n選択あり?}
+    VALID -- No --> END5([⚠ 終了])
+    VALID -- Yes --> DISPATCH{アクション}
+
+    DISPATCH -- "D" --> DELETE["action_delete()"]
+    DISPATCH -- "A" --> ARCHIVE["action_archive()"]
+    DISPATCH -- "U" --> UNARCHIVE["action_unarchive()"]
+
+    %% --- DELETE ---
+    DELETE --> D_SHOW["削除対象と\n合計サイズを表示"]
+    D_SHOW --> D_DRYRUN{--dry-run?}
+    D_DRYRUN -- Yes --> D_DRY([📋 プレビュー表示\n終了])
+    D_DRYRUN -- No --> D_CONFIRM[/"Confirm DELETE? (yes/no)"/]
+    D_CONFIRM --> D_YES{yes / y?}
+    D_YES -- No --> D_CANCEL([✅ キャンセル])
+    D_YES -- Yes --> D_EXEC["shutil.rmtree() で削除\nJSON メタデータも削除"]
+    D_EXEC --> D_END([✅ 削除完了\n件数・解放サイズを表示])
+
+    %% --- ARCHIVE ---
+    ARCHIVE --> A_FILTER["既アーカイブ済みを\nスキップ"]
+    A_FILTER --> A_NOJSON["JSON なしを\n警告・除外"]
+    A_NOJSON --> A_DRYRUN{--dry-run?}
+    A_DRYRUN -- Yes --> A_DRY([📋 プレビュー表示\n終了])
+    A_DRYRUN -- No --> A_CONFIRM[/"Confirm ARCHIVE? (yes/no)"/]
+    A_CONFIRM --> A_YES{yes / y?}
+    A_YES -- No --> A_CANCEL([✅ キャンセル])
+    A_YES -- Yes --> A_EXEC["set_archive_status(True)\nisArchived を true に書き換え"]
+    A_EXEC --> A_END([✅ アーカイブ完了\n再起動を促す])
+
+    %% --- UNARCHIVE ---
+    UNARCHIVE --> U_FILTER["非アーカイブ済みを\nスキップ"]
+    U_FILTER --> U_NOJSON["JSON なしを\n警告・除外"]
+    U_NOJSON --> U_DRYRUN{--dry-run?}
+    U_DRYRUN -- Yes --> U_DRY([📋 プレビュー表示\n終了])
+    U_DRYRUN -- No --> U_CONFIRM[/"Confirm UNARCHIVE? (yes/no)"/]
+    U_CONFIRM --> U_YES{yes / y?}
+    U_YES -- No --> U_CANCEL([✅ キャンセル])
+    U_YES -- Yes --> U_EXEC["set_archive_status(False)\nisArchived を false に書き換え"]
+    U_EXEC --> U_END([✅ アーカイブ解除完了\n再起動を促す])
+
+    %% --- Styling ---
+    style START fill:#4a90d9,color:#fff,stroke:none
+    style ERR1 fill:#e74c3c,color:#fff,stroke:none
+    style END1 fill:#27ae60,color:#fff,stroke:none
+    style END2 fill:#27ae60,color:#fff,stroke:none
+    style END3 fill:#e67e22,color:#fff,stroke:none
+    style END4 fill:#27ae60,color:#fff,stroke:none
+    style END5 fill:#e67e22,color:#fff,stroke:none
+    style D_DRY fill:#8e44ad,color:#fff,stroke:none
+    style D_CANCEL fill:#27ae60,color:#fff,stroke:none
+    style D_END fill:#27ae60,color:#fff,stroke:none
+    style A_DRY fill:#8e44ad,color:#fff,stroke:none
+    style A_CANCEL fill:#27ae60,color:#fff,stroke:none
+    style A_END fill:#27ae60,color:#fff,stroke:none
+    style U_DRY fill:#8e44ad,color:#fff,stroke:none
+    style U_CANCEL fill:#27ae60,color:#fff,stroke:none
+    style U_END fill:#27ae60,color:#fff,stroke:none
